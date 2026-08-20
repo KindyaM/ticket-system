@@ -3,6 +3,10 @@ from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
 from models import Ticket
 from fastapi.middleware.cors import CORSMiddleware
+from schemas import TicketCreate
+from fastapi import FastAPI, HTTPException
+
+
 
 
 
@@ -26,8 +30,11 @@ def get_db():
         db.close()
 
 @app.post("/tickets")
-def create_ticket(title: str, description: str, db: Session = Depends(get_db)):
-    ticket = Ticket(title=title, description=description)
+def create_ticket(ticketCreated: TicketCreate, db: Session = Depends(get_db)):
+    ticket = Ticket(
+    title=ticketCreated.title,
+    description=ticketCreated.description
+)
     db.add(ticket)
     db.commit()
     db.refresh(ticket)
@@ -39,7 +46,15 @@ def get_tickets(db: Session = Depends(get_db)):
 
 @app.get("/tickets/{ticket_id}")
 def get_ticket(ticket_id: int, db: Session = Depends(get_db)):
-    return db.query(Ticket).filter(Ticket.id == ticket_id).first()
+
+        
+
+        ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+
+        if ticket is None:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+
+        return ticket
 
 @app.put("/tickets/{ticket_id}")
 def update_ticket(ticket_id: int, status: str, db: Session = Depends(get_db)):

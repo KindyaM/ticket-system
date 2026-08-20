@@ -16,7 +16,7 @@ function App() {
 
   const createTicket = () => {
     if (!title) return
-    axios.post(`${API}/tickets?title=${title}&description=${description}`)
+    axios.post(`${API}/tickets`, { title, description })
       .then(() => { fetchTickets(); setTitle(""); setDescription("") })
   }
 
