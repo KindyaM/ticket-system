@@ -1,11 +1,11 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
-from models import Ticket
+from models import Ticket, User
 from fastapi.middleware.cors import CORSMiddleware
-from schemas import TicketCreate
+from schemas import TicketCreate, UserCreate, UserResponse
 from fastapi import FastAPI, HTTPException
-
+froom security import hash_password
 
 
 
@@ -71,3 +71,18 @@ def delete_ticket(ticket_id: int, db: Session = Depends(get_db)):
     db.delete(ticket)
     db.commit()
     return {"message": f"Ticket {ticket_id} deleted"}
+
+@app.post("/register",  response_model=UserResponse)
+def register_user(userCreated: UserCreate, db: Session = Depends (get_db)):
+    hashed_password = hash_password(userCreated.password)
+    user = User(
+        email = userCreated.email,
+        password = hashed_password,
+        role = userCreated.role,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+    
+    
