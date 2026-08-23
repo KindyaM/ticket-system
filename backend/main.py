@@ -5,7 +5,7 @@ from models import Ticket, User
 from fastapi.middleware.cors import CORSMiddleware
 from schemas import TicketCreate, UserCreate, UserResponse
 from fastapi import FastAPI, HTTPException
-froom security import hash_password
+from security import hash_password
 
 
 
@@ -78,7 +78,7 @@ def register_user(userCreated: UserCreate, db: Session = Depends (get_db)):
     user = User(
         email = userCreated.email,
         password = hashed_password,
-        role = userCreated.role,
+        role = "client",
     )
     db.add(user)
     db.commit()

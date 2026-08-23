@@ -5,11 +5,13 @@ class TicketCreate(BaseModel):
     description: str = Field(..., min_length = 1)
 
 class UserCreate(BaseModel):
-    email: str = Field(..., min_length = 1)
-    password: str = Field(..., min_length = 1)
-    role: str = Field(...)    
+    email: str = Field(..., min_length = 1, example = "user@example.com")
+    password: str = Field(..., min_length = 1, example = "mypassword@123")
+       
 
 class UserResponse(BaseModel):
     id: int
     email: str
     role: str
+    class Config:
+        orm_mode = True
