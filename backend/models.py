@@ -22,3 +22,4 @@ class User(Base):
     role = Column(String(20))
 
     tickets = relationship("Ticket", back_populates="user")
+

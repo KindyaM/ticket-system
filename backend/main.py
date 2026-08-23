@@ -1,11 +1,10 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
 from models import Ticket, User
 from fastapi.middleware.cors import CORSMiddleware
-from schemas import TicketCreate, UserCreate, UserResponse
-from fastapi import FastAPI, HTTPException
-from security import hash_password
+from schemas import TicketCreate, UserCreate, UserResponse, UserLogin
+from security import hash_password, verify_password
 
 
 
@@ -74,6 +73,12 @@ def delete_ticket(ticket_id: int, db: Session = Depends(get_db)):
 
 @app.post("/register",  response_model=UserResponse)
 def register_user(userCreated: UserCreate, db: Session = Depends (get_db)):
+
+    existing_user = db.query(User).filter(User.email == userCreated.email).first()
+
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already exists")
+
     hashed_password = hash_password(userCreated.password)
     user = User(
         email = userCreated.email,
@@ -85,4 +90,28 @@ def register_user(userCreated: UserCreate, db: Session = Depends (get_db)):
     db.refresh(user)
     return user
     
-    
+@app.post("/login")
+def login_user(userLogin: UserLogin, db: Session = Depends(get_db)):
+
+    existing_user = db.query(User).filter(
+        User.email == userLogin.email
+    ).first()
+
+    if existing_user is None:
+        raise HTTPException(
+            status_code=401,
+            detail="User does not exist"
+        )
+
+    password_correct = verify_password(
+        userLogin.password,
+        existing_user.password
+    )
+
+    if not password_correct:
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect password"
+        )
+
+    return existing_user
