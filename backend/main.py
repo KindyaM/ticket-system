@@ -4,7 +4,7 @@ from database import SessionLocal, engine, Base
 from models import Ticket, User
 from fastapi.middleware.cors import CORSMiddleware
 from schemas import TicketCreate, UserCreate, UserResponse, UserLogin
-from security import hash_password, verify_password
+from security import hash_password, verify_password, create_access_token
 
 
 
@@ -114,4 +114,12 @@ def login_user(userLogin: UserLogin, db: Session = Depends(get_db)):
             detail="Incorrect password"
         )
 
-    return existing_user
+    access_token = create_access_token({
+    "user_id": existing_user.id,
+    "role": existing_user.role
+})
+
+    return {
+    "access_token": access_token,
+    "token_type": "bearer"
+}
