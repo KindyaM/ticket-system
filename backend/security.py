@@ -1,30 +1,65 @@
-from passlib.context import CryptContext
-from jose import jwt
-from fastapi.security import OAuth2PasswordBearer
-from models import User
+from datetime import datetime, timedelta
+
 from fastapi import Depends, HTTPException
-from database import get_db
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from passlib.context import CryptContext
+from jose import jwt, JWTError
+
+from database import get_db
+from models import User
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+SECRET_KEY = "change-this-later"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-def hash_password(password):
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto"
+)
+
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="login"
+)
+
+
+def hash_password(password: str):
     return pwd_context.hash(password)
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
 
-SECRET_KEY = "your-secret-key"
-ALGORITHM = "HS256"
+def verify_password(
+    plain_password: str,
+    hashed_password: str
+):
+    return pwd_context.verify(
+        plain_password,
+        hashed_password
+    )
+
 
 def create_access_token(data: dict):
-    return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+    to_encode = data.copy()
+
+    expire = datetime.utcnow() + timedelta(
+        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+
+    to_encode.update({
+        "exp": expire
+    })
+
+    return jwt.encode(
+        to_encode,
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
 
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+def get_current_user(
+    token: str = Depends(oauth2_scheme)
+):
 
     try:
         payload = jwt.decode(
@@ -49,11 +84,15 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
             detail="Invalid token"
         )
 
+
 def get_current_admin(
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.id == user_id).first()
+
+    user = db.query(User).filter(
+        User.id == user_id
+    ).first()
 
     if user is None:
         raise HTTPException(
