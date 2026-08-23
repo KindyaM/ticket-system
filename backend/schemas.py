@@ -19,3 +19,6 @@ class UserResponse(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+
+class TicketStatusUpdate(BaseModel):
+    status: str = Field(...)
