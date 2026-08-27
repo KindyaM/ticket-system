@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react"
+
+import { useEffect, useMemo, useState } from "react"
 import axios from "axios"
 
 const API = "http://localhost:8000"
@@ -6,18 +7,25 @@ const API = "http://localhost:8000"
 function AdminDashboard({ token, onLogout }) {
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
+
   const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
 
   const [selectedTicket, setSelectedTicket] = useState(null)
   const [replies, setReplies] = useState([])
+
   const [replyMessage, setReplyMessage] = useState("")
+  const [sendingReply, setSendingReply] = useState(false)
 
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
 
-  // -------------------------
+  const [activeStat, setActiveStat] = useState("all")
+
+
+  // =========================================================
   // FETCH TICKETS
-  // -------------------------
+  // =========================================================
 
   const fetchTickets = async () => {
     try {
@@ -44,13 +52,30 @@ function AdminDashboard({ token, onLogout }) {
     }
   }
 
+
   useEffect(() => {
     fetchTickets()
   }, [])
 
-  // -------------------------
+
+  // =========================================================
+  // CLEAR SUCCESS MESSAGE
+  // =========================================================
+
+  useEffect(() => {
+    if (!success) return
+
+    const timer = setTimeout(() => {
+      setSuccess("")
+    }, 3000)
+
+    return () => clearTimeout(timer)
+  }, [success])
+
+
+  // =========================================================
   // TICKET COUNTS
-  // -------------------------
+  // =========================================================
 
   const openTickets = tickets.filter(
     ticket =>
@@ -67,36 +92,82 @@ function AdminDashboard({ token, onLogout }) {
       ticket.status?.toLowerCase() === "resolved"
   ).length
 
-  // -------------------------
-  // SEARCH + FILTER
-  // -------------------------
 
-  const filteredTickets = tickets.filter(ticket => {
-    const search = searchTerm.toLowerCase().trim()
+  // =========================================================
+  // FILTERED TICKETS
+  // =========================================================
 
-    const matchesSearch =
-      ticket.title?.toLowerCase().includes(search) ||
-      ticket.description?.toLowerCase().includes(search) ||
-      String(ticket.id).includes(search) ||
-      String(ticket.user_id).includes(search)
+  const filteredTickets = useMemo(() => {
 
-    const matchesStatus =
-      statusFilter === "all" ||
-      ticket.status?.toLowerCase() === statusFilter
+    return tickets.filter(ticket => {
 
-    return matchesSearch && matchesStatus
-  })
+      const search = searchTerm.toLowerCase().trim()
 
-  // -------------------------
+      const matchesSearch =
+        !search ||
+        ticket.title?.toLowerCase().includes(search) ||
+        ticket.description?.toLowerCase().includes(search) ||
+        String(ticket.id).includes(search) ||
+        String(ticket.user_id).includes(search)
+
+      const ticketStatus =
+        ticket.status?.toLowerCase()
+
+      const matchesStatus =
+        statusFilter === "all" ||
+        ticketStatus === statusFilter
+
+      const matchesStat =
+        activeStat === "all" ||
+        ticketStatus === activeStat
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesStat
+      )
+    })
+
+  }, [
+    tickets,
+    searchTerm,
+    statusFilter,
+    activeStat
+  ])
+
+
+  // =========================================================
+  // STAT CARD CLICK
+  // =========================================================
+
+  const handleStatClick = (status) => {
+
+    setActiveStat(status)
+
+    if (status === "all") {
+      setStatusFilter("all")
+    } else {
+      setStatusFilter(status)
+    }
+  }
+
+
+  // =========================================================
   // OPEN TICKET
-  // -------------------------
+  // =========================================================
 
   const openTicket = async (ticket) => {
+
     setSelectedTicket(ticket)
+
     setReplies([])
+
     setReplyMessage("")
 
+    setError("")
+
     try {
+
       const response = await axios.get(
         `${API}/admin/tickets/${ticket.id}/replies`,
         {
@@ -109,27 +180,35 @@ function AdminDashboard({ token, onLogout }) {
       setReplies(response.data)
 
     } catch (err) {
-      console.error(
-        "ERROR LOADING REPLIES:",
-        err.response?.data || err
+
+      setError(
+        err.response?.data?.detail ||
+        "Unable to load conversation"
       )
     }
   }
 
-  // -------------------------
+
+  // =========================================================
   // SEND ADMIN REPLY
-  // -------------------------
+  // =========================================================
 
   const sendReply = async () => {
-    if (!replyMessage.trim() || !selectedTicket) {
-      return
-    }
+
+    if (!replyMessage.trim()) return
+
+    if (!selectedTicket) return
+
+    setSendingReply(true)
+
+    setError("")
 
     try {
+
       await axios.post(
         `${API}/admin/tickets/${selectedTicket.id}/replies`,
         {
-          message: replyMessage
+          message: replyMessage.trim()
         },
         {
           headers: {
@@ -151,32 +230,51 @@ function AdminDashboard({ token, onLogout }) {
 
       setReplies(response.data)
 
+      setSuccess("Reply sent successfully")
+
     } catch (err) {
-      console.error(
-        "ERROR SENDING REPLY:",
-        err.response?.data || err
+
+      setError(
+        err.response?.data?.detail ||
+        "Unable to send reply"
       )
+
+    } finally {
+
+      setSendingReply(false)
     }
   }
 
-  // -------------------------
-  // UPDATE STATUS
-  // -------------------------
 
-  const updateStatus = async (ticketId, currentStatus) => {
-    const status = currentStatus?.toLowerCase()
+  // =========================================================
+  // UPDATE STATUS
+  // =========================================================
+
+  const updateStatus = async (
+    ticketId,
+    currentStatus
+  ) => {
+
+    const status =
+      currentStatus?.toLowerCase()
 
     let newStatus
 
     if (status === "open") {
+
       newStatus = "in progress"
+
     } else if (status === "in progress") {
+
       newStatus = "resolved"
+
     } else {
+
       newStatus = "open"
     }
 
     try {
+
       await axios.put(
         `${API}/admin/tickets/${ticketId}`,
         {
@@ -191,35 +289,45 @@ function AdminDashboard({ token, onLogout }) {
 
       await fetchTickets()
 
-      if (selectedTicket?.id === ticketId) {
+      if (
+        selectedTicket?.id === ticketId
+      ) {
+
         setSelectedTicket(prev => ({
           ...prev,
           status: newStatus
         }))
       }
 
+      setSuccess(
+        `Ticket marked as ${newStatus}`
+      )
+
     } catch (err) {
-      console.error(
-        "ERROR UPDATING STATUS:",
-        err.response?.data || err
+
+      setError(
+        err.response?.data?.detail ||
+        "Unable to update ticket"
       )
     }
   }
 
-  // -------------------------
+
+  // =========================================================
   // DELETE TICKET
-  // -------------------------
+  // =========================================================
 
   const deleteTicket = async (id) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this ticket?"
-    )
 
-    if (!confirmed) {
-      return
-    }
+    const confirmed =
+      window.confirm(
+        "Are you sure you want to delete this ticket?"
+      )
+
+    if (!confirmed) return
 
     try {
+
       await axios.delete(
         `${API}/admin/tickets/${id}`,
         {
@@ -229,15 +337,22 @@ function AdminDashboard({ token, onLogout }) {
         }
       )
 
-      if (selectedTicket?.id === id) {
+      if (
+        selectedTicket?.id === id
+      ) {
+
         setSelectedTicket(null)
         setReplies([])
-        setReplyMessage("")
       }
 
       await fetchTickets()
 
+      setSuccess(
+        "Ticket deleted successfully"
+      )
+
     } catch (err) {
+
       setError(
         err.response?.data?.detail ||
         "Unable to delete ticket"
@@ -245,52 +360,90 @@ function AdminDashboard({ token, onLogout }) {
     }
   }
 
-  // -------------------------
+
+  // =========================================================
   // STATUS BUTTON TEXT
-  // -------------------------
+  // =========================================================
 
-  const getStatusButtonText = (status) => {
-    const currentStatus = status?.toLowerCase()
+  const getStatusButtonText = (
+    status
+  ) => {
 
-    if (currentStatus === "open") {
+    const currentStatus =
+      status?.toLowerCase()
+
+    if (
+      currentStatus === "open"
+    ) {
       return "Start Progress"
     }
 
-    if (currentStatus === "in progress") {
+    if (
+      currentStatus === "in progress"
+    ) {
       return "Resolve"
     }
 
     return "Reopen"
   }
 
-  // -------------------------
-  // CLOSE TICKET
-  // -------------------------
 
-  const closeTicket = () => {
-    setSelectedTicket(null)
-    setReplies([])
-    setReplyMessage("")
+  // =========================================================
+  // STATUS ICON
+  // =========================================================
+
+  const getStatusIcon = (status) => {
+
+    const currentStatus =
+      status?.toLowerCase()
+
+    if (currentStatus === "open") {
+      return "●"
+    }
+
+    if (currentStatus === "in progress") {
+      return "◐"
+    }
+
+    return "✓"
   }
 
-  // -------------------------
-  // RENDER
-  // -------------------------
 
   return (
-    <div className="dashboard">
 
-      {/* HEADER */}
+    <div className="dashboard admin-dashboard">
+
+
+      {/* =====================================================
+          HEADER
+          ===================================================== */}
 
       <header className="dashboard-header">
 
         <div>
-          <h1>Admin Dashboard</h1>
 
-          <p>
-            Manage and respond to support tickets.
-          </p>
+          <div className="admin-title-row">
+
+            <div className="admin-logo">
+              ⚡
+            </div>
+
+            <div>
+
+              <h1>
+                Admin Dashboard
+              </h1>
+
+              <p>
+                Manage and respond to support tickets.
+              </p>
+
+            </div>
+
+          </div>
+
         </div>
+
 
         <button
           onClick={onLogout}
@@ -302,56 +455,184 @@ function AdminDashboard({ token, onLogout }) {
       </header>
 
 
-      {/* STATS */}
+      {/* =====================================================
+          NOTIFICATIONS
+          ===================================================== */}
+
+      {success && (
+
+        <div className="success-message">
+
+          <span>✓</span>
+
+          {success}
+
+        </div>
+
+      )}
+
+
+      {error && (
+
+        <div className="error-message">
+
+          {error}
+
+        </div>
+
+      )}
+
+
+      {/* =====================================================
+          STATISTICS
+          ===================================================== */}
 
       <div className="ticket-stats">
 
-        <div className="stat-card">
-          <span>Total tickets</span>
-          <strong>{tickets.length}</strong>
-        </div>
 
-        <div className="stat-card">
-          <span>Open</span>
-          <strong>{openTickets}</strong>
-        </div>
+        <button
+          className={`stat-card ${
+            activeStat === "all"
+              ? "stat-active"
+              : ""
+          }`}
+          onClick={() =>
+            handleStatClick("all")
+          }
+        >
 
-        <div className="stat-card">
-          <span>In Progress</span>
-          <strong>{inProgressTickets}</strong>
-        </div>
+          <span>
+            Total tickets
+          </span>
 
-        <div className="stat-card">
-          <span>Resolved</span>
-          <strong>{resolvedTickets}</strong>
-        </div>
+          <strong>
+            {tickets.length}
+          </strong>
+
+          <small>
+            All submitted tickets
+          </small>
+
+        </button>
+
+
+        <button
+          className={`stat-card ${
+            activeStat === "open"
+              ? "stat-active"
+              : ""
+          }`}
+          onClick={() =>
+            handleStatClick("open")
+          }
+        >
+
+          <span>
+            Open
+          </span>
+
+          <strong>
+            {openTickets}
+          </strong>
+
+          <small>
+            Awaiting action
+          </small>
+
+        </button>
+
+
+        <button
+          className={`stat-card ${
+            activeStat === "in progress"
+              ? "stat-active"
+              : ""
+          }`}
+          onClick={() =>
+            handleStatClick("in progress")
+          }
+        >
+
+          <span>
+            In Progress
+          </span>
+
+          <strong>
+            {inProgressTickets}
+          </strong>
+
+          <small>
+            Currently being handled
+          </small>
+
+        </button>
+
+
+        <button
+          className={`stat-card ${
+            activeStat === "resolved"
+              ? "stat-active"
+              : ""
+          }`}
+          onClick={() =>
+            handleStatClick("resolved")
+          }
+        >
+
+          <span>
+            Resolved
+          </span>
+
+          <strong>
+            {resolvedTickets}
+          </strong>
+
+          <small>
+            Successfully completed
+          </small>
+
+        </button>
 
       </div>
 
 
-      {/* SELECTED TICKET */}
+      {/* =====================================================
+          TICKET DETAILS
+          ===================================================== */}
 
       {selectedTicket ? (
 
         <section className="ticket-details-section">
 
+
           <button
-            onClick={closeTicket}
+            onClick={() => {
+
+              setSelectedTicket(null)
+
+              setReplies([])
+
+              setReplyMessage("")
+
+              setError("")
+            }}
             className="back-button"
           >
             ← Back to tickets
           </button>
 
+
           <div className="ticket-details-card">
 
-            {/* TICKET HEADER */}
+
+            {/* HEADER */}
 
             <div className="ticket-details-header">
 
               <div>
 
                 <span className="ticket-number">
-                  #{selectedTicket.id}
+                  TICKET #{selectedTicket.id}
                 </span>
 
                 <h2>
@@ -359,17 +640,26 @@ function AdminDashboard({ token, onLogout }) {
                 </h2>
 
                 <small>
-                  User ID: {selectedTicket.user_id}
+                  Submitted by User #{selectedTicket.user_id}
                 </small>
 
               </div>
+
 
               <span
                 className={`status-badge status-${selectedTicket.status
                   ?.toLowerCase()
                   .replace(" ", "-")}`}
               >
+
+                <span>
+                  {getStatusIcon(
+                    selectedTicket.status
+                  )}
+                </span>
+
                 {selectedTicket.status}
+
               </span>
 
             </div>
@@ -377,9 +667,17 @@ function AdminDashboard({ token, onLogout }) {
 
             {/* DESCRIPTION */}
 
-            <p className="ticket-details-description">
-              {selectedTicket.description}
-            </p>
+            <div className="ticket-description-box">
+
+              <span>
+                DESCRIPTION
+              </span>
+
+              <p className="ticket-details-description">
+                {selectedTicket.description}
+              </p>
+
+            </div>
 
 
             <hr />
@@ -387,49 +685,89 @@ function AdminDashboard({ token, onLogout }) {
 
             {/* CONVERSATION */}
 
-            <h3>
-              Conversation
-            </h3>
+            <div className="conversation-header">
+
+              <div>
+
+                <h3>
+                  Conversation
+                </h3>
+
+                <p>
+                  Communication between client and support
+                </p>
+
+              </div>
+
+              <span className="reply-count">
+                {replies.length}{" "}
+                {replies.length === 1
+                  ? "message"
+                  : "messages"}
+              </span>
+
+            </div>
+
 
             <div className="reply-list">
 
               {replies.length === 0 ? (
 
-                <p>
-                  No replies yet.
-                </p>
+                <div className="conversation-empty">
+
+                  <div>
+                    💬
+                  </div>
+
+                  <strong>
+                    No replies yet
+                  </strong>
+
+                  <p>
+                    Start the conversation by replying below.
+                  </p>
+
+                </div>
 
               ) : (
 
-                replies.map(reply => {
+                replies.map(reply => (
 
-                  const isClient =
-                    reply.user_id === selectedTicket.user_id
+                  <div
+                    key={reply.id}
+                    className={`reply-card ${
+                      reply.user_id ===
+                      selectedTicket.user_id
+                        ? "client-reply"
+                        : "admin-reply"
+                    }`}
+                  >
 
-                  return (
-                    <div
-                      key={reply.id}
-                      className={`reply-card ${
-                        isClient
-                          ? "client-reply"
-                          : "admin-reply"
-                      }`}
-                    >
+                    <div className="reply-header">
 
                       <strong>
-                        {isClient
+                        {reply.user_id ===
+                        selectedTicket.user_id
                           ? "Client"
-                          : "Admin"}
+                          : "Support Admin"}
                       </strong>
 
-                      <p>
-                        {reply.message}
-                      </p>
+                      <span>
+                        {reply.user_id ===
+                        selectedTicket.user_id
+                          ? "Customer"
+                          : "Support"}
+                      </span>
 
                     </div>
-                  )
 
-                })
+                    <p>
+                      {reply.message}
+                    </p>
+
+                  </div>
+
+                ))
 
               )}
 
@@ -438,30 +776,57 @@ function AdminDashboard({ token, onLogout }) {
 
             {/* REPLY FORM */}
 
-            {selectedTicket.status?.toLowerCase() === "resolved" ? (
+            {selectedTicket.status
+              ?.toLowerCase() ===
+            "resolved" ? (
 
               <div className="resolved-message">
+
+                <span>
+                  ✓
+                </span>
+
                 This ticket has been resolved.
+
               </div>
 
             ) : (
 
               <div className="reply-form">
 
-                <textarea
-                  placeholder="Reply to the client..."
-                  value={replyMessage}
-                  onChange={(e) =>
-                    setReplyMessage(e.target.value)
-                  }
-                  rows="4"
-                />
+                <div>
+
+                  <label>
+                    Reply to client
+                  </label>
+
+                  <textarea
+                    placeholder="Write your response..."
+                    value={replyMessage}
+                    onChange={(e) =>
+                      setReplyMessage(
+                        e.target.value
+                      )
+                    }
+                    rows="4"
+                  />
+
+                </div>
+
 
                 <button
                   onClick={sendReply}
                   className="primary-button"
+                  disabled={
+                    sendingReply ||
+                    !replyMessage.trim()
+                  }
                 >
-                  Send Reply
+
+                  {sendingReply
+                    ? "Sending..."
+                    : "Send Reply →"}
+
                 </button>
 
               </div>
@@ -474,57 +839,78 @@ function AdminDashboard({ token, onLogout }) {
 
       ) : (
 
-        /* TICKET LIST */
+
+        /* =====================================================
+           TICKET LIST
+           ===================================================== */
 
         <section className="tickets-section">
+
 
           <div className="tickets-heading">
 
             <div>
 
               <h2>
-                All tickets
+                Support tickets
               </h2>
 
               <p>
-                Manage tickets submitted by users
+                Search, filter and manage submitted tickets.
               </p>
 
             </div>
+
 
             <button
               onClick={fetchTickets}
               className="refresh-button"
               disabled={loading}
             >
-              {loading
-                ? "Loading..."
-                : "Refresh"}
+              ↻ Refresh
             </button>
 
           </div>
 
 
-          {/* SEARCH + FILTER */}
+          {/* SEARCH */}
 
           <div className="ticket-filters">
 
-            <input
-              type="text"
-              placeholder="Search tickets..."
-              value={searchTerm}
-              onChange={(e) =>
-                setSearchTerm(e.target.value)
-              }
-              className="ticket-search"
-            />
+            <div className="search-wrapper">
+
+              <span className="search-icon">
+                🔎
+              </span>
+
+              <input
+                type="text"
+                className="ticket-search"
+                placeholder="Search tickets, users or descriptions..."
+                value={searchTerm}
+                onChange={(e) =>
+                  setSearchTerm(
+                    e.target.value
+                  )
+                }
+              />
+
+            </div>
+
 
             <select
-              value={statusFilter}
-              onChange={(e) =>
-                setStatusFilter(e.target.value)
-              }
               className="status-filter"
+              value={statusFilter}
+              onChange={(e) => {
+
+                setStatusFilter(
+                  e.target.value
+                )
+
+                setActiveStat(
+                  e.target.value
+                )
+              }}
             >
 
               <option value="all">
@@ -548,12 +934,24 @@ function AdminDashboard({ token, onLogout }) {
           </div>
 
 
-          {/* ERROR */}
+          {/* RESULTS */}
 
-          {error && (
-            <div className="error-message">
-              {error}
+          {!loading &&
+            searchTerm && (
+
+            <div className="search-results">
+
+              Showing{" "}
+              <strong>
+                {filteredTickets.length}
+              </strong>{" "}
+              matching{" "}
+              {filteredTickets.length === 1
+                ? "ticket"
+                : "tickets"}
+
             </div>
+
           )}
 
 
@@ -561,7 +959,11 @@ function AdminDashboard({ token, onLogout }) {
 
           {loading ? (
 
-            <div className="empty-state">
+            <div className="loading-state">
+
+              <div className="loading-spinner">
+                ⟳
+              </div>
 
               <p>
                 Loading tickets...
@@ -569,29 +971,9 @@ function AdminDashboard({ token, onLogout }) {
 
             </div>
 
-          ) : tickets.length === 0 ? (
-
-            /* NO TICKETS */
-
-            <div className="empty-state">
-
-              <div className="empty-icon">
-                🎫
-              </div>
-
-              <h3>
-                No tickets
-              </h3>
-
-              <p>
-                There are currently no support tickets.
-              </p>
-
-            </div>
-
           ) : filteredTickets.length === 0 ? (
 
-            /* NO SEARCH RESULTS */
+            /* EMPTY */
 
             <div className="empty-state">
 
@@ -607,87 +989,135 @@ function AdminDashboard({ token, onLogout }) {
                 Try changing your search or filter.
               </p>
 
+              {(searchTerm ||
+                statusFilter !== "all") && (
+
+                <button
+                  className="clear-filter-button"
+                  onClick={() => {
+
+                    setSearchTerm("")
+
+                    setStatusFilter("all")
+
+                    setActiveStat("all")
+                  }}
+                >
+                  Clear filters
+                </button>
+
+              )}
+
             </div>
 
           ) : (
 
-            /* TICKET LIST */
-
             <div className="ticket-list">
 
-              {filteredTickets.map(ticket => (
+              {filteredTickets.map(
+                (ticket, index) => (
 
-                <div
-                  key={ticket.id}
-                  className="ticket-card admin-ticket-card"
-                  onClick={() => openTicket(ticket)}
-                >
-
-                  <div className="ticket-info">
-
-                    <span className="ticket-number">
-                      #{ticket.id}
-                    </span>
-
-                    <h3>
-                      {ticket.title}
-                    </h3>
-
-                    <p>
-                      {ticket.description}
-                    </p>
-
-                    <small>
-                      User ID: {ticket.user_id}
-                    </small>
-
-                  </div>
+                  <div
+                    key={ticket.id}
+                    className="ticket-card admin-ticket-card"
+                    style={{
+                      animationDelay:
+                        `${index * 0.04}s`
+                    }}
+                    onClick={() =>
+                      openTicket(ticket)
+                    }
+                  >
 
 
-                  <div className="admin-ticket-actions">
+                    {/* TICKET INFO */}
 
-                    <span
-                      className={`status-badge status-${ticket.status
-                        ?.toLowerCase()
-                        .replace(" ", "-")}`}
-                    >
-                      {ticket.status}
-                    </span>
+                    <div className="ticket-info">
+
+                      <div className="ticket-meta">
+
+                        <span className="ticket-number">
+                          #{ticket.id}
+                        </span>
+
+                        <span className="ticket-user">
+                          User #{ticket.user_id}
+                        </span>
+
+                      </div>
+
+                      <h3>
+                        {ticket.title}
+                      </h3>
+
+                      <p>
+                        {ticket.description}
+                      </p>
+
+                    </div>
 
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
+                    {/* ACTIONS */}
 
-                        updateStatus(
-                          ticket.id,
+                    <div className="admin-ticket-actions">
+
+                      <span
+                        className={`status-badge status-${ticket.status
+                          ?.toLowerCase()
+                          .replace(" ", "-")}`}
+                      >
+
+                        <span>
+                          {getStatusIcon(
+                            ticket.status
+                          )}
+                        </span>
+
+                        {ticket.status}
+
+                      </span>
+
+
+                      <button
+                        onClick={(e) => {
+
+                          e.stopPropagation()
+
+                          updateStatus(
+                            ticket.id,
+                            ticket.status
+                          )
+                        }}
+                        className="action-button"
+                      >
+
+                        {getStatusButtonText(
                           ticket.status
-                        )
-                      }}
-                      className="action-button"
-                    >
-                      {getStatusButtonText(
-                        ticket.status
-                      )}
-                    </button>
+                        )}
+
+                      </button>
 
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
+                      <button
+                        onClick={(e) => {
 
-                        deleteTicket(ticket.id)
-                      }}
-                      className="delete-button"
-                    >
-                      Delete
-                    </button>
+                          e.stopPropagation()
+
+                          deleteTicket(
+                            ticket.id
+                          )
+                        }}
+                        className="delete-button"
+                      >
+                        Delete
+                      </button>
+
+                    </div>
 
                   </div>
 
-                </div>
-
-              ))}
+                )
+              )}
 
             </div>
 
@@ -702,3 +1132,4 @@ function AdminDashboard({ token, onLogout }) {
 }
 
 export default AdminDashboard
+
