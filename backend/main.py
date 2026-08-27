@@ -414,15 +414,50 @@ def get_ticket_replies(
 
     return replies
 
+# -------------------------
+# ADMIN - GET TICKET REPLIES
+# -------------------------
+
+@app.get(
+    "/admin/tickets/{ticket_id}/replies",
+    response_model=list[TicketReplyResponse]
+)
+def admin_get_ticket_replies(
+    ticket_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin)
+):
+
+    ticket = db.query(Ticket).filter(
+        Ticket.id == ticket_id
+    ).first()
+
+    if ticket is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Ticket not found"
+        )
+
+    replies = db.query(TicketReply).filter(
+        TicketReply.ticket_id == ticket_id
+    ).all()
+
+    return replies
+
+
+# -------------------------
+# ADMIN - CREATE TICKET REPLY
+# -------------------------
+
 @app.post(
-    "/tickets/{ticket_id}/replies",
+    "/admin/tickets/{ticket_id}/replies",
     response_model=TicketReplyResponse
 )
-def create_ticket_reply(
+def admin_create_ticket_reply(
     ticket_id: int,
     reply: TicketReplyCreate,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user)
+    current_admin: User = Depends(get_current_admin)
 ):
 
     ticket = db.query(Ticket).filter(
@@ -438,7 +473,7 @@ def create_ticket_reply(
     new_reply = TicketReply(
         message=reply.message,
         ticket_id=ticket_id,
-        user_id=user_id
+        user_id=current_admin.id
     )
 
     db.add(new_reply)
