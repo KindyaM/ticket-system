@@ -47,32 +47,36 @@ function AdminDashboard({ token, onLogout }) {
       ticket.status?.toLowerCase() === "closed"
   ).length
 
-  const updateStatus = async (ticket) => {
-    const newStatus =
-      ticket.status?.toLowerCase() === "open"
-        ? "closed"
+  const updateStatus = async (ticketId, currentStatus) => {
+  const newStatus =
+    currentStatus === "open"
+      ? "in progress"
+      : currentStatus === "in progress"
+        ? "resolved"
         : "open"
 
-    try {
-      await axios.put(
-        `${API}/tickets/${ticket.id}?status=${newStatus}`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+  try {
+    await axios.put(
+      `${API}/admin/tickets/${ticketId}`,
+      {
+        status: newStatus
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
         }
-      )
+      }
+    )
 
-      fetchTickets()
+    fetchTickets()
 
-    } catch (err) {
-      setError(
-        err.response?.data?.detail ||
-        "Unable to update ticket"
-      )
-    }
+  } catch (err) {
+    console.error(
+      "ERROR UPDATING STATUS:",
+      err.response?.data || err
+    )
   }
+}
 
   const deleteTicket = async (id) => {
     const confirmed = window.confirm(
@@ -83,7 +87,7 @@ function AdminDashboard({ token, onLogout }) {
 
     try {
       await axios.delete(
-        `${API}/tickets/${id}`,
+        `${API}/admin/tickets/${id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`
@@ -244,9 +248,7 @@ function AdminDashboard({ token, onLogout }) {
                   </span>
 
                   <button
-                    onClick={() =>
-                      updateStatus(ticket)
-                    }
+                    onClick={() => updateStatus(ticket.id, ticket.status)}
                     className="action-button"
                   >
                     {ticket.status?.toLowerCase() === "open"

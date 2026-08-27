@@ -4,14 +4,17 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from database import get_db, Base, engine
-from models import User, Ticket
+from models import User, Ticket, TicketReply
 from schemas import (
     UserCreate,
     UserResponse,
     TicketCreate,
     TicketStatusUpdate,
-    TicketResponse
+    TicketResponse,
+    TicketReplyCreate,
+    TicketReplyResponse
 )
+
 from security import (
     hash_password,
     verify_password,
@@ -345,3 +348,101 @@ def admin_test(
         "user_id": current_admin.id,
         "role": current_admin.role
     }
+
+# -------------------------
+# CREATE TICKET REPLY
+# -------------------------
+
+@app.post(
+    "/tickets/{ticket_id}/replies",
+    response_model=TicketReplyResponse
+)
+def create_ticket_reply(
+    ticket_id: int,
+    reply: TicketReplyCreate,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user)
+):
+
+    ticket = db.query(Ticket).filter(
+        Ticket.id == ticket_id,
+        Ticket.user_id == user_id
+    ).first()
+
+    if ticket is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Ticket not found"
+        )
+
+    new_reply = TicketReply(
+        message=reply.message,
+        ticket_id=ticket_id,
+        user_id=user_id
+    )
+
+    db.add(new_reply)
+    db.commit()
+    db.refresh(new_reply)
+
+    return new_reply
+
+@app.get(
+    "/tickets/{ticket_id}/replies",
+    response_model=list[TicketReplyResponse]
+)
+def get_ticket_replies(
+    ticket_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user)
+):
+
+    ticket = db.query(Ticket).filter(
+        Ticket.id == ticket_id,
+        Ticket.user_id == user_id
+    ).first()
+
+    if ticket is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Ticket not found"
+        )
+
+    replies = db.query(TicketReply).filter(
+        TicketReply.ticket_id == ticket_id
+    ).all()
+
+    return replies
+
+@app.post(
+    "/tickets/{ticket_id}/replies",
+    response_model=TicketReplyResponse
+)
+def create_ticket_reply(
+    ticket_id: int,
+    reply: TicketReplyCreate,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user)
+):
+
+    ticket = db.query(Ticket).filter(
+        Ticket.id == ticket_id
+    ).first()
+
+    if ticket is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Ticket not found"
+        )
+
+    new_reply = TicketReply(
+        message=reply.message,
+        ticket_id=ticket_id,
+        user_id=user_id
+    )
+
+    db.add(new_reply)
+    db.commit()
+    db.refresh(new_reply)
+
+    return new_reply

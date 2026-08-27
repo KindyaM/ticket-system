@@ -1,6 +1,6 @@
-function TicketCard({ ticket }) {
+function TicketCard({ ticket, onClick }) {
   return (
-    <div className="ticket-card">
+    <div className="ticket-card" onClick={onClick}>
 
       <div className="ticket-info">
 

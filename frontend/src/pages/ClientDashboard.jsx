@@ -12,6 +12,10 @@ function ClientDashboard({ token, onLogout }) {
   const [creating, setCreating] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState("")
+  const [selectedTicket, setSelectedTicket] = useState(null)
+  const [replies, setReplies] = useState([])
+  const [replyMessage, setReplyMessage] = useState("")
+  const [currentUserId, setCurrentUserId] = useState(null)
 
   const fetchTickets = async () => {
     try {
@@ -38,8 +42,9 @@ function ClientDashboard({ token, onLogout }) {
   }
 
   useEffect(() => {
-    fetchTickets()
-  }, [])
+  fetchTickets()
+  fetchCurrentUser()
+}, [])
 
   const createTicket = async (e) => {
     e.preventDefault()
@@ -81,6 +86,76 @@ function ClientDashboard({ token, onLogout }) {
       setCreating(false)
     }
   }
+  const openTicket = async (ticket) => {
+  setSelectedTicket(ticket)
+  setReplies([])
+
+  try {
+    const response = await axios.get(
+      `${API}/tickets/${ticket.id}/replies`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    )
+
+    setReplies(response.data)
+  } catch (err) {
+    console.error("ERROR LOADING REPLIES:", err)
+  }
+}
+
+
+const sendReply = async () => {
+  if (!replyMessage.trim()) return
+
+  try {
+    await axios.post(
+      `${API}/tickets/${selectedTicket.id}/replies`,
+      {
+        message: replyMessage
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    )
+
+    setReplyMessage("")
+
+    const response = await axios.get(
+      `${API}/tickets/${selectedTicket.id}/replies`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    )
+
+    setReplies(response.data)
+
+  } catch (err) {
+    console.error("ERROR SENDING REPLY:", err)
+  }
+}
+  const fetchCurrentUser = async () => {
+  try {
+    const response = await axios.get(
+      `${API}/me`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    )
+
+    setCurrentUserId(response.data)
+  } catch (err) {
+    console.error("ERROR GETTING CURRENT USER:", err)
+  }
+}
 
   const openTickets = tickets.filter(
     ticket =>
@@ -140,6 +215,98 @@ function ClientDashboard({ token, onLogout }) {
 
 
       {/* TICKETS */}
+      {selectedTicket ? (
+  <section className="ticket-details-section">
+
+    <button
+      onClick={() => setSelectedTicket(null)}
+      className="back-button"
+    >
+      ← Back to tickets
+    </button>
+
+    <div className="ticket-details-card">
+
+      <div className="ticket-details-header">
+
+        <div>
+          <span className="ticket-number">
+            #{selectedTicket.id}
+          </span>
+
+          <h2>{selectedTicket.title}</h2>
+        </div>
+
+        <span
+          className={`status-badge status-${selectedTicket.status
+            ?.toLowerCase()
+            .replace(" ", "-")}`}
+        >
+          {selectedTicket.status}
+        </span>
+
+      </div>
+
+      <p className="ticket-details-description">
+        {selectedTicket.description}
+      </p>
+
+      <hr />
+
+      <h3>Conversation</h3>
+
+      <div className="reply-list">
+
+        {replies.length === 0 ? (
+          <p>No replies yet.</p>
+        ) : (
+          replies.map(reply => {
+            const isClient = reply.user_id === currentUserId
+
+            return (
+              <div
+                key={reply.id}
+                className={`reply-card ${
+                  isClient ? "client-reply" : "admin-reply"
+                }`}
+              >
+                <strong>
+                  {isClient ? "Client" : "Admin"}
+                </strong>
+
+                <p>{reply.message}</p>
+              </div>
+            )
+          })
+        )}
+
+      </div>
+
+      <div className="reply-form">
+
+        <textarea
+          placeholder="Write a reply..."
+          value={replyMessage}
+          onChange={(e) =>
+            setReplyMessage(e.target.value)
+          }
+          rows="4"
+        />
+
+        <button
+          onClick={sendReply}
+          className="primary-button"
+        >
+          Send Reply
+        </button>
+
+      </div>
+
+    </div>
+
+  </section>
+
+) : (
 
       <section className="tickets-section">
 
@@ -292,20 +459,22 @@ function ClientDashboard({ token, onLogout }) {
 
           <div className="ticket-list">
 
-            {tickets.map(ticket => (
+  {tickets.map(ticket => (
 
-              <TicketCard
-                key={ticket.id}
-                ticket={ticket}
-              />
+    <TicketCard
+      key={ticket.id}
+      ticket={ticket}
+      onClick={() => openTicket(ticket)}
+    />
 
-            ))}
+  ))}
 
-          </div>
+</div>
 
         )}
 
       </section>
+)}
 
     </div>
   )

@@ -38,3 +38,21 @@ class TicketResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+class TicketReplyCreate(BaseModel):
+    message: str
+
+
+class TicketReplyResponse(BaseModel):
+    id: int
+    message: str
+    ticket_id: int
+    user_id: int
+
+    class Config:
+        orm_mode = True 
+
+class TicketReplyCreate(BaseModel):
+    message: str
+
+
